@@ -107,4 +107,14 @@ class CommonsClientTest extends TestCase
     {
         $this->assertSame('Emmanuel Macron (cropped).jpg', CommonsClient::getFileName('http://commons.wikimedia.org/wiki/Special:FilePath/Emmanuel%20Macron%20%28cropped%29.jpg'));
     }
+
+    public function testALimitedRateIsWaitedForAsWikimediaAsks(): void
+    {
+        $client = $this->client(new MockHttpClient([
+            new MockResponse('', ['http_code' => 429, 'response_headers' => ['Retry-After' => '0']]),
+            $this->answer(),
+        ]));
+
+        $this->assertCount(1, $client->getFiles(['Emmanuel_Macron_(cropped).jpg'], 480));
+    }
 }

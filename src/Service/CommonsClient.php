@@ -4,6 +4,7 @@ namespace Wexample\SymfonyRemoteWikimedia\Service;
 
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
+use Symfony\Contracts\HttpClient\Exception\HttpExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Wexample\PhpRemote\Class\RemoteStatus;
 use Wexample\PhpRemote\Exception\RemoteException;
@@ -15,8 +16,9 @@ use Wexample\SymfonyRemoteWikimedia\Class\CommonsFile;
  * it answers at once — and their download.
  *
  * Wikimedia turns away clients that do not say who they are: every request carries
- * the configured user agent. A request failing is tried again a few times, then
- * raised as a RemoteException.
+ * the configured user agent. A request failing is tried again a few times — after
+ * the delay Wikimedia asks for when it limits the rate —, then raised as a
+ * RemoteException.
  */
 class CommonsClient implements RemoteInterface
 {
@@ -135,7 +137,7 @@ class CommonsClient implements RemoteInterface
                     throw new RemoteException(self::KEY, sprintf('Unable to download "%s": %s', $url, $exception->getMessage()), $exception);
                 }
 
-                sleep($attempt * $this->retryDelay);
+                sleep($this->getRetryDelay($exception, $attempt));
             }
         }
     }
@@ -199,8 +201,25 @@ class CommonsClient implements RemoteInterface
                     throw $exception instanceof RemoteException ? $exception : new RemoteException(self::KEY, $exception->getMessage(), $exception);
                 }
 
-                sleep($attempt * $this->retryDelay);
+                sleep($this->getRetryDelay($exception, $attempt));
             }
         }
+    }
+
+    /**
+     * How long to wait before asking again: what Wikimedia says when it limits the
+     * rate (429, `Retry-After`), a minute at most; the configured delay otherwise.
+     */
+    private function getRetryDelay(
+        ExceptionInterface|RemoteException $exception,
+        int $attempt
+    ): int {
+        if ($exception instanceof HttpExceptionInterface && 429 === $exception->getResponse()->getStatusCode()) {
+            $retryAfter = $exception->getResponse()->getHeaders(false)['retry-after'][0] ?? null;
+
+            return min(60, is_numeric($retryAfter) ? (int) $retryAfter : $attempt * max(1, $this->retryDelay) * 3);
+        }
+
+        return $attempt * $this->retryDelay;
     }
 }
