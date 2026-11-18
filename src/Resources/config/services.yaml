@@ -1,0 +1,12 @@
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+        public: false
+
+    Wexample\SymfonyRemoteWikimedia\Service\CommonsClient:
+        arguments:
+            $userAgent: '%wexample_symfony_remote_wikimedia.user_agent%'
+            $apiUrl: '%wexample_symfony_remote_wikimedia.commons.api_url%'
+            $attempts: '%wexample_symfony_remote_wikimedia.commons.attempts%'
+            $retryDelay: '%wexample_symfony_remote_wikimedia.commons.retry_delay%'
